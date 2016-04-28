@@ -300,6 +300,14 @@ read_command_file(emu_out_t *out, emu_data_t *emu, const char *command_file)
 
     return rv;
 }
+static void sel_list(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    int count=0;
+
+    count = ipmi_mc_list_sel(mc);
+    out->printf(out, "%d\n", count);
+	return;
+}
 
 static int
 sel_enable(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
@@ -1249,6 +1257,7 @@ static struct emu_cmd_info cmds[] =
     { "include",	NOMC,		read_cmds,		 &cmds[27] },
     { "sleep",		NOMC,		sleep_cmd,		 &cmds[28] },
     { "debug",		NOMC,		debug_cmd,		 &cmds[29] },
+    { "sel_list",	MC,		sel_list,		&cmds[30] },
     { "persist",	NOMC,		persist_cmd,		 NULL },
     { NULL }
 };
