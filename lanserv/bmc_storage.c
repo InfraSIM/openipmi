@@ -120,6 +120,12 @@ handle_sel_time(const char *name, long val, void *cb_data)
 }
 
 int
+ipmi_mc_list_sel(lmc_data_t *mc)
+{
+    return mc->sel.count;
+}
+
+int
 ipmi_mc_enable_sel(lmc_data_t    *mc,
 		   int           max_entries,
 		   unsigned char flags)
