@@ -623,6 +623,20 @@ handle_clear_sel(lmc_data_t    *mc,
     mc->sel.flags &= ~0x80;
 
     rewrite_sels(mc);
+
+    /* add clear sel event if set */
+    if (mc->sysinfo->clear_sel_event) {
+        unsigned char event[13] = {0x69, 0x4F, 0x1F, 0x57, 0x20, 0x00, 0x04, 0x10, 0xf3, 0x6f, 0x02, 0xff, 0xff};
+        unsigned int r;
+        int rv;
+        rv = ipmi_mc_add_to_sel(mc, 0x02, &event[0], &r);
+        if (rv == EAGAIN)
+            rdata[0] = IPMI_OUT_OF_SPACE_CC;
+        else if (rv)
+            rdata[0] = IPMI_UNKNOWN_ERR_CC;
+        else 
+            rdata[0] = 0;
+    }
 }
 
 static void

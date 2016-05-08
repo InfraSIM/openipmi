@@ -1426,6 +1426,7 @@ main(int argc, const char *argv[])
     sysinfo.cfree = ifree;
     sysinfo.lan_channel_init = lan_channel_init;
     sysinfo.ser_channel_init = ser_channel_init;
+    sysinfo.clear_sel_event = 1;
     data.sys = &sysinfo;
 
     err = pipe(sigpipeh);
