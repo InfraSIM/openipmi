@@ -366,6 +366,7 @@ struct sys_data_s {
     pef_data_t *cpef;
     ipmi_sol_t *sol;
     lmc_data_t *mc;
+    unsigned char clear_sel_event;
 
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);
