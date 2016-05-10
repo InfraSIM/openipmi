@@ -864,6 +864,8 @@ read_config(sys_data_t *sys,
 	    err = get_sock_addr(&tokptr,
 				&sys->console_addr, &sys->console_addr_len,
 				NULL, SOCK_STREAM, &errstr);
+    } else if (strcmp(tok, "clear_sel_event") == 0) {
+	    err = get_bool(&tokptr, &sys->clear_sel_event, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;
