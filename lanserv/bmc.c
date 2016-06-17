@@ -323,11 +323,13 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 
 	if (check_msg_length(omsg, 8, ordata, ordata_len))
 	    return;
+#if 0
 	if ((omsg->data[0] & 0x3f) != 0) {
 	    ordata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	    *ordata_len = 1;
 	    return;
 	}
+#endif
 
 	data = omsg->data + 1;
 	data_len = omsg->len - 1;
