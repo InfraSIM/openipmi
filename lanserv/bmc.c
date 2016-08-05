@@ -313,7 +313,6 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    return;
 	}
 #endif
-
 	data = omsg->data + 1;
 	data_len = omsg->len - 1;
 	if (data[0] == 0) {
@@ -424,9 +423,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    rmsg->next = NULL;
 	    srcmc->recv_q_head = rmsg;
 	    srcmc->recv_q_tail = rmsg;
-	    if (bchan->set_atn)
-		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
 	}
+	srcmc->msg_flags |= IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE;
+	if (bchan->set_atn)
+		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
     } else if (emu->sysinfo->debug & DEBUG_MSG)
 	debug_log_raw_msg(emu->sysinfo, ordata, *ordata_len,
 			  "Response message:");

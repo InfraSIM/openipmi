@@ -41,6 +41,7 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_lan.h>
 
+
 static void
 handle_get_device_id(lmc_data_t    *mc,
 		     msg_t         *msg,
@@ -1136,6 +1137,150 @@ handle_deactivate_payload(lmc_data_t    *mc,
     ipmi_sol_deactivate(mc, channel, msg, rdata, rdata_len);
 }
 
+static const unsigned char psu_mfr_id[] = {
+'C', 'h', 'i', 'c', 'o', 'n', 'y',
+'P', 'o', 'w', 'e', 'r'
+};
+
+static const unsigned char psu_mfr_location[] = {
+0x43, 0x48, 0x49, 0x4e, 0x41
+};
+
+static const unsigned char psu_mfr_model_1[] = {
+'R', '1', '2', '-', '1', 'K', '6', 'P', '2', 'A',
+0xbb, 0xb1, 0xa6, 0xd2
+};
+
+static const unsigned char psu_mfr_model_2[] = {
+'R', '1', '2', '-', '1', 'K', '6', 'P', '2', 'A',
+0xcc, 0x79, 0xcd, 0x01
+};
+
+static const unsigned char psu_mfr_revision[] = {
+' ', '0', '3'
+};
+
+static const unsigned char psu_mfr_serial_1[] = {
+'F', '3', '3', '6', '7', '2', '1', '6', 
+'0', '9', '0', '0', '0', '8', '2', '3'
+};
+
+static const unsigned char psu_mfr_serial_2[] = {
+'F', '3', '3', '6', '7', '2', '1', '6', 
+'0', '9', '0', '0', '0', '8', '2', '3'
+};
+
+static const unsigned char psu_mfr_date[] = {
+0x31, 0x35, 0x31, 0x36
+};
+
+#define PSU_MFR_ID_OFFSET	0x99
+#define PSU_MFR_MODEL_OFFSET	0x9a
+#define PSU_MFR_REV_OFFSET	0x9b
+#define PSU_MFR_LOCATION_OFFSET	0x9c
+#define PSU_MFR_DATE_OFFSET	0x9d
+#define PSU_MFR_SERIAL_OFFSET	0x9e
+
+static const unsigned char *psu1_reg_map[] = {
+	[PSU_MFR_ID_OFFSET] = &psu_mfr_id[0],
+	[PSU_MFR_MODEL_OFFSET] = &psu_mfr_model_1[0],
+	[PSU_MFR_REV_OFFSET] = &psu_mfr_revision[0],
+	[PSU_MFR_LOCATION_OFFSET] = &psu_mfr_location[0],
+	[PSU_MFR_DATE_OFFSET] = &psu_mfr_date[0],
+	[PSU_MFR_SERIAL_OFFSET] = &psu_mfr_serial_1[0],
+};
+
+static const unsigned char *psu2_reg_map[] = {
+	[PSU_MFR_ID_OFFSET] = &psu_mfr_id[0],
+	[PSU_MFR_MODEL_OFFSET] = &psu_mfr_model_2[0],
+	[PSU_MFR_REV_OFFSET] = &psu_mfr_revision[0],
+	[PSU_MFR_LOCATION_OFFSET] = &psu_mfr_location[0],
+	[PSU_MFR_DATE_OFFSET] = &psu_mfr_date[0],
+	[PSU_MFR_SERIAL_OFFSET] = &psu_mfr_serial_2[0],
+};
+
+#define PSU_ADDRESS_1	0xb0
+#define PSU_ADDRESS_2	0xb2
+
+static void
+handle_master_read_write(lmc_data_t *mc,
+        msg_t *msg,
+        unsigned char *rdata,
+        unsigned int *rdata_len,
+        void *cb_data)
+{
+    unsigned char slave_address = 0xff;
+    unsigned int i = 0;
+    unsigned int read_count = 0;
+    off_t offset = 0;
+
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+        return;
+
+    printf("channel 0x%x\n", (msg->data[0] & 0xf0) >> 4);
+
+    slave_address = msg->data[1] & (unsigned char)~0x1;
+    printf("slave address 0x%x\n", slave_address);
+
+    read_count = msg->data[2];
+    printf("read count 0x%x\n", read_count);
+
+    offset = msg->data[3];
+    printf("register offset 0x%lx\n", offset);
+    
+    switch (slave_address) {
+        // disk_led_n
+        // raw 0x6 0x52 0x1 0xc0 0x1 {offset:0x0|0x1|0x2|0x4|0x5|0x6}
+        case 0xc0:
+            // offset validation
+            if (offset > 0x6) {
+                rdata[0] = 0xcc;
+                *rdata_len = 1;
+                break;
+            }
+            // read data from offset
+            for (i = 0; i < read_count; i++) {
+                rdata[1+i] = 0;
+            }
+
+            // return data to ipmi client
+            rdata[0] = 0;
+            rdata[1] = 0x40;
+            *rdata_len = read_count + 1;
+            break;
+	  case PSU_ADDRESS_1:
+		if (offset > 0x9e || offset < 0x99) {
+			rdata[0] = 0xcc;
+			*rdata_len = 1;
+			return;	
+		}
+		rdata[0] = 0x0;
+
+		for (i = 0; i < read_count - 1; i++)	
+			rdata[i+2] = psu1_reg_map[offset][i];
+		rdata[1] = read_count - 1;
+		*rdata_len = read_count + 1;
+		break;
+	  case PSU_ADDRESS_2:	
+		if (offset > 0x9e || offset < 0x99) {
+			rdata[0] = 0xcc;
+			*rdata_len = 1;
+			return;	
+		}
+		rdata[0] = 0x0;
+
+		for (i = 0; i < read_count - 1; i++)	
+			rdata[i+2] = psu2_reg_map[offset][i];
+		rdata[1] = read_count - 1;
+		*rdata_len = read_count + 1;
+		break;
+        default:
+            rdata[0] = 0x82;
+            *rdata_len = 1;
+    }
+    printf("handle_master_read_write done.\n");
+}
+
 cmd_handler_f app_netfn_handlers[256] = {
     [IPMI_GET_DEVICE_ID_CMD] = handle_get_device_id,
     [IPMI_GET_WATCHDOG_TIMER_CMD] = handle_get_watchdog_timer,
@@ -1159,5 +1304,6 @@ cmd_handler_f app_netfn_handlers[256] = {
     [IPMI_GET_PAYLOAD_INSTANCE_INFO_CMD] = handle_get_payload_instance_info,
     [IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD] = handle_get_channel_payload_support,
     [IPMI_ACTIVATE_PAYLOAD_CMD] = handle_activate_payload,
-    [IPMI_DEACTIVATE_PAYLOAD_CMD] = handle_deactivate_payload
+    [IPMI_DEACTIVATE_PAYLOAD_CMD] = handle_deactivate_payload,
+    [IPMI_MASTER_READ_WRITE_CMD] = handle_master_read_write
 };
