@@ -1302,6 +1302,31 @@ handle_master_read_write(lmc_data_t *mc,
     printf("handle_master_read_write done.\n");
 }
 
+static void 
+handle_get_system_info_parameters(lmc_data_t *mc,
+        msg_t *msg,
+        unsigned char *rdata,
+        unsigned int *rdata_len,
+        void *cb_data)
+{
+    unsigned char return_data[] = {
+    0x11, 0x00, 0x00, 0x08, 0x53, 0x32, 0x53, 0x5f, 
+    0x33, 0x41, 0x31, 0x39, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00
+    };
+    unsigned int i = 0;
+
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+        return;
+
+    for (i = 0; i < sizeof(return_data); i++) {
+        rdata[i + 1] = return_data[i];
+    }
+
+    rdata[0] = 0;
+    *rdata_len = sizeof(return_data) + 1;
+}
+
 cmd_handler_f app_netfn_handlers[256] = {
     [IPMI_GET_DEVICE_ID_CMD] = handle_get_device_id,
     [IPMI_GET_WATCHDOG_TIMER_CMD] = handle_get_watchdog_timer,
@@ -1326,5 +1351,6 @@ cmd_handler_f app_netfn_handlers[256] = {
     [IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD] = handle_get_channel_payload_support,
     [IPMI_ACTIVATE_PAYLOAD_CMD] = handle_activate_payload,
     [IPMI_DEACTIVATE_PAYLOAD_CMD] = handle_deactivate_payload,
-    [IPMI_MASTER_READ_WRITE_CMD] = handle_master_read_write
+    [IPMI_MASTER_READ_WRITE_CMD] = handle_master_read_write,
+    [IPMI_GET_SYSTEM_INFO_PARAMETERS_CMD] = handle_get_system_info_parameters
 };

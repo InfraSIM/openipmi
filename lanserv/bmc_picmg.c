@@ -156,11 +156,47 @@ handle_get_hs_led(lmc_data_t    *mc,
     *rdata_len = 2;
 }
 
+/********************************************
+*
+*  The following two commands for quanta_t41
+*  temp method
+*
+*********************************************/
+static void
+handle_get_node_led(lmc_data_t  *mc,
+		  msg_t         *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
+{
+    rdata[0] = 0;
+    rdata[1] = 0x1;
+    *rdata_len = 2;
+}
+
+static void
+handle_get_node_id(lmc_data_t  *mc,
+		  msg_t         *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
+{
+    int node_position_sensor = 0xea;
+    sensor_t *sensor;
+
+    sensor = mc->sensors[msg->rs_lun][node_position_sensor];
+    rdata[0] = 0;
+    rdata[1] = sensor->value;
+    *rdata_len = 2;
+}
+
 cmd_handler_f oem0_netfn_handlers[256] = {
     [0x01] = handle_set_power,
     [0x02] = handle_get_power,
     [0x03] = handle_set_hs_led,
-    [0x04] = handle_get_hs_led
+    [0x04] = handle_get_hs_led,
+    [0x77] = handle_get_node_led,
+    [0x7d] = handle_get_node_id
 };
 
 static void
