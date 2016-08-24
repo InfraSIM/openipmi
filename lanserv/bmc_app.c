@@ -1166,8 +1166,8 @@ static const unsigned char psu_mfr_serial_1[] = {
 };
 
 static const unsigned char psu_mfr_serial_2[] = {
-'F', '3', '3', '6', '7', '2', '1', '6', 
-'0', '9', '0', '0', '0', '8', '2', '3'
+'F', '3', '3', '6', '7', '2', '1', '7', 
+'0', '9', '0', '0', '0', '8', '2', '4'
 };
 
 static const unsigned char psu_mfr_date[] = {
@@ -1217,16 +1217,9 @@ handle_master_read_write(lmc_data_t *mc,
     if (check_msg_length(msg, 3, rdata, rdata_len))
         return;
 
-    printf("channel 0x%x\n", (msg->data[0] & 0xf0) >> 4);
-
     slave_address = msg->data[1] & (unsigned char)~0x1;
-    printf("slave address 0x%x\n", slave_address);
-
     read_count = msg->data[2];
-    printf("read count 0x%x\n", read_count);
-
     offset = msg->data[3];
-    printf("register offset 0x%lx\n", offset);
     
     switch (slave_address) {
         // disk_led_n
