@@ -1165,6 +1165,77 @@ struct emu_cmd_info {
     struct emu_cmd_info  *next;
 };
 
+#define MAX_DATA_LEN    8192
+/** 
+ *
+ * mc_add_i2c_data <mc> <bridged mc> <slave> <offset> <length> data <....>
+ *
+ **/
+static int
+mc_add_i2c_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned char data[MAX_DATA_LEN];
+    unsigned char bridged_mc_addr; 
+    unsigned char slave_address; 
+    unsigned int offset;
+    unsigned int length;
+    
+    unsigned int i;
+    int rv;
+    const char *tok;
+
+    rv = emu_get_uchar(out, toks, &bridged_mc_addr, "Bridged MC", 0);
+    if (rv)
+        return rv;
+
+    rv = emu_get_uchar(out, toks, &slave_address, "Slave Device", 0);
+    if (rv)
+        return rv;
+
+    rv = emu_get_uint(out, toks, &offset, "Data Offset");
+    if (rv)
+        return rv;
+
+    rv = emu_get_uint(out, toks, &length, "Data Length");
+    if (rv)
+        return rv;
+
+    tok = mystrtok(NULL, " \t\n", toks);
+    if (!tok) {
+        out->printf(out, "** No I2C data type given");
+        return -1;
+    }
+
+    if (strcmp(tok, "data") == 0) {
+        for (i = 0; i < length; i++) {
+            rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
+            if (ENOSPC == rv)
+                break;
+
+            if (rv) {
+                out->printf(out, "**Error 0x%x in data byte %d\n", rv, i);
+                return rv;
+            }
+        }
+    }
+
+    rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
+    if (ENOSPC != rv) {
+        out->printf(out, "**Error: input data too long for I2C data\n", rv, i);
+        return EINVAL;
+    }
+
+    memset(data + i, 0, length - i);
+
+    rv = ipmi_mc_add_i2c_data(mc, bridged_mc_addr, slave_address,
+            offset, length, data);
+    if (rv) {
+        out->printf(out, "**Error: failed to add i2c data.\n");
+        return EINVAL;
+    }
+    return 0;
+}
+
 static struct emu_cmd_info cmds[] =
 {
     { "quit",		NOMC,		quit,			 &cmds[1] },
@@ -1197,6 +1268,7 @@ static struct emu_cmd_info cmds[] =
     { "sleep",		NOMC,		sleep_cmd,		 &cmds[28] },
     { "debug",		NOMC,		debug_cmd,		 &cmds[29] },
     { "sel_list",	MC,		sel_list,		&cmds[30] },
+    { "mc_add_i2c_data", MC, mc_add_i2c_data, &cmds[31] },
     { "persist",	NOMC,		persist_cmd,		 NULL },
     { NULL }
 };

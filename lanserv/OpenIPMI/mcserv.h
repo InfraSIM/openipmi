@@ -403,4 +403,13 @@ void ipmi_mc_set_aux_fw_revision(lmc_data_t *mc,
 				 unsigned char aux_fw_revision[4]);
 const char *get_lanserv_version(void);
 
+
+int ipmi_mc_add_i2c_data(lmc_data_t *mc,
+        unsigned char bridged_mc_addr,
+        unsigned char slave_address,
+        unsigned char offset,
+        unsigned int length,
+        void *data);
+
+
 #endif /* __MCSERV_H */

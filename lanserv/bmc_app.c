@@ -1137,141 +1137,214 @@ handle_deactivate_payload(lmc_data_t    *mc,
     ipmi_sol_deactivate(mc, channel, msg, rdata, rdata_len);
 }
 
-static const unsigned char psu_mfr_id[] = {
-'C', 'h', 'i', 'c', 'o', 'n', 'y',
-'P', 'o', 'w', 'e', 'r'
-};
+i2c_slave_t *
+find_i2c_slave_dev(lmc_data_t *mc, unsigned int addr)
+{
+    i2c_slave_t *dev = mc->devlist;
 
-static const unsigned char psu_mfr_location[] = {
-0x43, 0x48, 0x49, 0x4e, 0x41
-};
+    while (dev && dev->addr != addr)
+        dev = dev->next;
+    return dev;
+}
 
-static const unsigned char psu_mfr_model_1[] = {
-'R', '1', '2', '-', '1', 'K', '6', 'P', '2', 'A',
-0xbb, 0xb1, 0xa6, 0xd2
-};
+static int
+dev_sem_trywait(i2c_slave_t *dev)
+{
+    struct timespec ts;
+    int rv;
 
-static const unsigned char psu_mfr_model_2[] = {
-'R', '1', '2', '-', '1', 'K', '6', 'P', '2', 'A',
-0xcc, 0x79, 0xcd, 0x01
-};
+restart:
+    ts.tv_sec = 0;
+    ts.tv_nsec = 250000000;
+    rv = sem_timedwait(&dev->sem, &ts);
+    if (rv) {
+        if (rv == EINTR)
+            goto restart;
 
-static const unsigned char psu_mfr_revision[] = {
-' ', '0', '3'
-};
+        if (rv == ETIMEDOUT)
+            rv = EAGAIN;
+        else
+            rv = errno;
 
-static const unsigned char psu_mfr_serial_1[] = {
-'F', '3', '3', '6', '7', '2', '1', '6', 
-'0', '9', '0', '0', '0', '8', '2', '3'
-};
+        return rv;
+    }
 
-static const unsigned char psu_mfr_serial_2[] = {
-'F', '3', '3', '6', '7', '2', '1', '7', 
-'0', '9', '0', '0', '0', '8', '2', '4'
-};
+    return 0;
+}
 
-static const unsigned char psu_mfr_date[] = {
-0x31, 0x35, 0x31, 0x36
-};
+int
+ipmi_mc_add_i2c_data(lmc_data_t *mc,
+        unsigned char bridged_mc_addr,
+        unsigned char slave_address,
+        unsigned char offset,
+        unsigned int length,
+        void *data)
+{
+    int rv = 0;
+    i2c_slave_t *dev;
 
-#define PSU_MFR_ID_OFFSET	0x99
-#define PSU_MFR_MODEL_OFFSET	0x9a
-#define PSU_MFR_REV_OFFSET	0x9b
-#define PSU_MFR_LOCATION_OFFSET	0x9c
-#define PSU_MFR_DATE_OFFSET	0x9d
-#define PSU_MFR_SERIAL_OFFSET	0x9e
+    lmc_data_t *bridged_mc = mc->sysinfo->ipmb_addrs[bridged_mc_addr];
 
-static const unsigned char *psu1_reg_map[] = {
-	[PSU_MFR_ID_OFFSET] = &psu_mfr_id[0],
-	[PSU_MFR_MODEL_OFFSET] = &psu_mfr_model_1[0],
-	[PSU_MFR_REV_OFFSET] = &psu_mfr_revision[0],
-	[PSU_MFR_LOCATION_OFFSET] = &psu_mfr_location[0],
-	[PSU_MFR_DATE_OFFSET] = &psu_mfr_date[0],
-	[PSU_MFR_SERIAL_OFFSET] = &psu_mfr_serial_1[0],
-};
+    if (!bridged_mc)
+        return -1;
 
-static const unsigned char *psu2_reg_map[] = {
-	[PSU_MFR_ID_OFFSET] = &psu_mfr_id[0],
-	[PSU_MFR_MODEL_OFFSET] = &psu_mfr_model_2[0],
-	[PSU_MFR_REV_OFFSET] = &psu_mfr_revision[0],
-	[PSU_MFR_LOCATION_OFFSET] = &psu_mfr_location[0],
-	[PSU_MFR_DATE_OFFSET] = &psu_mfr_date[0],
-	[PSU_MFR_SERIAL_OFFSET] = &psu_mfr_serial_2[0],
-};
+    if (!bridged_mc->enabled || slave_address > 0xff || offset > 0xff)
+        return EINVAL;
 
-#define PSU_ADDRESS_1	0xb0
-#define PSU_ADDRESS_2	0xb2
+    dev = find_i2c_slave_dev(bridged_mc, slave_address);
+    if (!dev) {
+        dev = malloc(sizeof(*dev));
+        memset(dev, 0, sizeof(*dev));
+        rv = sem_init(&dev->sem, 0, 1);
+        if (rv) {
+            rv = errno;
+            free(dev);
+            return rv;
+        }
+
+        dev->addr = slave_address;
+        dev->next = bridged_mc->devlist;
+        bridged_mc->devlist = dev;
+    }
+
+    if (dev->data[offset]) {
+        free(dev->data[offset]);
+    }
+
+    if (length) {
+        dev->data[offset] = malloc(sizeof(i2c_data_t));
+        if (!dev->data[offset])
+            return ENOMEM;
+        memcpy(dev->data[offset]->data, data, length);
+#if 0
+        int i = 0;
+        /* Debug */
+        printf("------> Add data for 0x%02x, offset 0x%02x data addr %p\n", slave_address, offset, dev->data[offset]);
+        for (i = 0; i < length; i++) {
+            printf("%c ", dev->data[offset]->data[i]);
+        }
+        printf("\n");
+#endif
+    } else
+        dev->data[offset] = NULL;
+
+    dev->data[offset]->length = length;
+    return rv;
+}
+
+static 
+int i2c_slave_read(i2c_slave_t *dev,
+        unsigned char offset,
+        unsigned int length,
+        unsigned char *data_out)
+{
+    i2c_data_t *data = NULL;
+    int rv = 0;
+
+    rv = dev_sem_trywait(dev);
+    if (rv) {
+        if (rv == EAGAIN)
+            rv = IPMI_NODE_BUSY_CC;
+        else
+            rv = IPMI_UNKNOWN_ERR_CC;
+        goto unlock;
+    }
+
+    data = dev->data[offset];
+    if (!data) {
+        rv = IPMI_INVALID_DATA_FIELD_CC;
+        goto unlock;
+    }
+
+    if (length > data->length) {
+        rv = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
+        goto unlock;
+    }
+
+    memcpy(data_out, data->data, length);
+unlock:
+    sem_post(&dev->sem);
+    return rv;
+}
+
+static
+int i2c_slave_write(i2c_slave_t *dev,
+        unsigned char offset,
+        unsigned int length,
+        unsigned char *data_in)
+{
+    int rv = 0;
+    i2c_data_t *data = NULL;
+
+    rv = dev_sem_trywait(dev);
+    if (rv) {
+        if (rv == EAGAIN)
+            rv = IPMI_NODE_BUSY_CC;
+        else
+            rv = IPMI_UNKNOWN_ERR_CC;
+        goto unlock;
+    }
+
+    data = dev->data[offset];
+    if (!data) {
+        rv = IPMI_INVALID_DATA_FIELD_CC;
+        goto unlock;
+    }
+
+    if (length > 0x100) {
+        rv = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
+        goto unlock;
+    }
+
+    memcpy(data->data, data_in, length);
+    data->length = length;
+unlock:
+    sem_post(&dev->sem);
+    return rv;
+}
 
 static void
-handle_master_read_write(lmc_data_t *mc,
+handle_master_write_read(lmc_data_t *mc,
         msg_t *msg,
         unsigned char *rdata,
         unsigned int *rdata_len,
         void *cb_data)
 {
     unsigned char slave_address = 0xff;
-    unsigned int i = 0;
     unsigned int read_count = 0;
     off_t offset = 0;
+    i2c_slave_t *sdev = NULL;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
         return;
-
+    
     slave_address = msg->data[1] & (unsigned char)~0x1;
     read_count = msg->data[2];
     offset = msg->data[3];
-    
-    switch (slave_address) {
-        // disk_led_n
-        // raw 0x6 0x52 0x1 0xc0 0x1 {offset:0x0|0x1|0x2|0x4|0x5|0x6}
-        case 0xc0:
-            // offset validation
-            if (offset > 0x6) {
-                rdata[0] = 0xcc;
-                *rdata_len = 1;
-                break;
-            }
-            // read data from offset
-            for (i = 0; i < read_count; i++) {
-                rdata[1+i] = 0;
-            }
 
-            // return data to ipmi client
-            rdata[0] = 0;
-            rdata[1] = 0x40;
-            *rdata_len = read_count + 1;
-            break;
-	  case PSU_ADDRESS_1:
-		if (offset > 0x9e || offset < 0x99) {
-			rdata[0] = 0xcc;
-			*rdata_len = 1;
-			return;	
-		}
-		rdata[0] = 0x0;
-
-		for (i = 0; i < read_count - 1; i++)	
-			rdata[i+2] = psu1_reg_map[offset][i];
-		rdata[1] = read_count - 1;
-		*rdata_len = read_count + 1;
-		break;
-	  case PSU_ADDRESS_2:	
-		if (offset > 0x9e || offset < 0x99) {
-			rdata[0] = 0xcc;
-			*rdata_len = 1;
-			return;	
-		}
-		rdata[0] = 0x0;
-
-		for (i = 0; i < read_count - 1; i++)	
-			rdata[i+2] = psu2_reg_map[offset][i];
-		rdata[1] = read_count - 1;
-		*rdata_len = read_count + 1;
-		break;
-        default:
-            rdata[0] = 0x82;
-            *rdata_len = 1;
+    /* Find the slave deivce */
+    sdev = find_i2c_slave_dev(mc, slave_address);
+    if (!sdev) {
+        rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+        *rdata_len = 1;
+        return;
     }
-    printf("handle_master_read_write done.\n");
+
+    if (read_count > 0) { /* it should be read command */
+        int rv;
+
+        rv = i2c_slave_read(sdev, offset, read_count - 1, &rdata[2]);
+        if (rv) {
+            rdata[0] = rv;
+            *rdata_len = 1;
+            return;
+        }
+
+        rdata[0] = 0x0;
+        rdata[1] = read_count - 1;
+        *rdata_len = read_count + 1;
+        return;
+    }
 }
 
 static void 
@@ -1323,6 +1396,6 @@ cmd_handler_f app_netfn_handlers[256] = {
     [IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD] = handle_get_channel_payload_support,
     [IPMI_ACTIVATE_PAYLOAD_CMD] = handle_activate_payload,
     [IPMI_DEACTIVATE_PAYLOAD_CMD] = handle_deactivate_payload,
-    [IPMI_MASTER_READ_WRITE_CMD] = handle_master_read_write,
+    [IPMI_MASTER_READ_WRITE_CMD] = handle_master_write_read,
     [IPMI_GET_SYSTEM_INFO_PARAMETERS_CMD] = handle_get_system_info_parameters
 };
