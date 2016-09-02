@@ -1314,11 +1314,13 @@ handle_master_write_read(lmc_data_t *mc,
     unsigned int read_count = 0;
     off_t offset = 0;
     i2c_slave_t *sdev = NULL;
+    int write = 0;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
         return;
     
     slave_address = msg->data[1] & (unsigned char)~0x1;
+    write = msg->data[1] & 0x1;
     read_count = msg->data[2];
     offset = msg->data[3];
 
@@ -1330,7 +1332,7 @@ handle_master_write_read(lmc_data_t *mc,
         return;
     }
 
-    if (read_count > 0) { /* it should be read command */
+    if (!write) { /* it should be read command */
         int rv;
 
         rv = i2c_slave_read(sdev, offset, read_count - 1, &rdata[2]);
