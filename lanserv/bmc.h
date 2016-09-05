@@ -197,6 +197,21 @@ typedef struct led_data_s
     unsigned char def_override_color;
 } led_data_t;
 
+typedef struct i2c_data_s
+{
+    unsigned char length;
+    unsigned char data[0x100];
+} i2c_data_t;
+
+typedef struct i2c_slave_s i2c_slave_t;
+struct i2c_slave_s
+{
+    sem_t sem;
+    unsigned char addr; /* command code for PMBUS PSU*/
+    i2c_data_t *data[0xff];
+    i2c_slave_t *next;
+};
+
 struct lmc_data_s
 {
     emu_data_t *emu;
@@ -332,6 +347,7 @@ struct lmc_data_s
     struct timeval watchdog_time; /* Set time */
     struct timeval watchdog_expiry; /* Timeout time */
     ipmi_timer_t *watchdog_timer;
+    i2c_slave_t *devlist;
 };
 
 typedef struct atca_site_s
