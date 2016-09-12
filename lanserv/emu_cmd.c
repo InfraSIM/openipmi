@@ -1297,6 +1297,30 @@ mc_add_i2c_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     return 0;
 }
 
+static int 
+mc_get_user_password(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    const char *username; 
+    const char password[20] = {0};
+    int rv;
+
+    username = mystrtok(NULL, " \t\n", toks);
+    if (!username) {
+        out->printf(out, "**Error: can't find username.\n");
+        return EINVAL;
+    }
+
+    rv = get_user_password(mc, username, &password[0]);
+
+    if (rv) {
+        out->printf(out, "**Error: failed to get password for %s\n", username);
+        return EINVAL;
+    }
+
+    out->printf(out, "%s\n", password);
+
+}
+
 static struct emu_cmd_info cmds[] =
 {
     { "quit",		NOMC,		quit,			 &cmds[1] },
@@ -1330,6 +1354,7 @@ static struct emu_cmd_info cmds[] =
     { "debug",		NOMC,		debug_cmd,		 &cmds[29] },
     { "sel_list",	MC,		sel_list,		&cmds[30] },
     { "mc_add_i2c_data", MC, mc_add_i2c_data, &cmds[31] },
+    { "get_user_password", MC, mc_get_user_password, &cmds[32] },
     { "persist",	NOMC,		persist_cmd,		 NULL },
     { NULL }
 };

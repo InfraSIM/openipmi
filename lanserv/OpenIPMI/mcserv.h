@@ -412,5 +412,6 @@ int ipmi_mc_add_i2c_data(lmc_data_t *mc,
         unsigned int length,
         void *data);
 
+int get_user_password(lmc_data_t *mc, const char *username, const char *password);
 
 #endif /* __MCSERV_H */

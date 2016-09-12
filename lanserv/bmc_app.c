@@ -836,6 +836,27 @@ handle_set_user_password(lmc_data_t    *mc,
     *rdata_len = 1;
 }
 
+int
+get_user_password(lmc_data_t *mc, const char *username, const char *password)
+{
+    uint8_t user;
+    user_t *users;
+
+    if (strlen(username) > 16)
+        return -1;
+
+    read_persist_users(mc->sysinfo);
+    users = ipmi_mc_get_users(mc);
+    for (user = 0; user < MAX_USERS + 1; user++) {
+        if (!strncmp(username, users[user].username, strlen(username))) {
+            memcpy(password, users[user].pw, strlen(users[user].pw));
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 static void
 handle_set_channel_access(lmc_data_t    *mc,
 			  msg_t         *msg,
