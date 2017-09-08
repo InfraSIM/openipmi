@@ -399,10 +399,12 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	/* An encapsulated command, put the response into the receive q. */
 	channel_t *bchan = srcmc->channels[15];
 
+    if ((omsg->data[0] & IPMI_MSG_BRIDGE_TRACK_MASK) == (IPMI_MSG_BRIDGE_NO_TRACK << IPMI_MSG_BRIDGE_SHIFT)) {
 	if (bchan->recv_in_q) {
 	    if (bchan->recv_in_q(srcmc->channels[15], rmsg))
 		return;
 	}
+    }
 
 	ordata[0] = 0;
 	*ordata_len = 1;
@@ -425,8 +427,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    srcmc->recv_q_tail = rmsg;
 	}
 	srcmc->msg_flags |= IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE;
+    if ((omsg->data[0] & IPMI_MSG_BRIDGE_TRACK_MASK) == (IPMI_MSG_BRIDGE_NO_TRACK << IPMI_MSG_BRIDGE_SHIFT)) {
 	if (bchan->set_atn)
 		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
+    }
     } else if (emu->sysinfo->debug & DEBUG_MSG)
 	debug_log_raw_msg(emu->sysinfo, ordata, *ordata_len,
 			  "Response message:");

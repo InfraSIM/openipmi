@@ -925,8 +925,6 @@ vm_set_attn(channel_t *chan, int val, int irq)
     unsigned int len = 0;
     unsigned char c[3];
 
-    if (val && si->do_attn) {
-
     if (!val)
 	vm_add_char(VM_CMD_NOATTN, c, &len);
     else if (irq)
@@ -937,8 +935,6 @@ vm_set_attn(channel_t *chan, int val, int irq)
     c[len++] = VM_CMD_CHAR;
 
     raw_send(si, c, len);
-
-    }
 }
 
 static int
