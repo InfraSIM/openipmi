@@ -464,6 +464,17 @@ const char *ipmi_get_color_string(unsigned int val);
 #define IPMI_SDR_MC_CONFIRMATION_RECORD		0x13
 #define IPMI_SDR_MC_BMC_MESSAGE_CHANNEL_RECORD	0x14
 
+
+/*
+ * Send message command bits
+ */
+#define IPMI_MSG_BRIDGE_NO_TRACK 0x0
+#define IPMI_MSG_BRIDGE_TRACK_REQUEST 0x01
+#define IPMI_MSG_BRIDGE_SEND_RAW 0x2
+#define IPMI_MSG_BRIDGE_SHIFT 6
+#define IPMI_MSG_BRIDGE_TRACK_MASK (0x3<<IPMI_MSG_BRIDGE_SHIFT)
+
+
 /*
  * Misc values
  */
